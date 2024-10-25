@@ -30,7 +30,7 @@ module Mongoid
       #
       # @return [ Array<Document>, Document ] The matching document(s).
       def find(*args)
-        look_like_slugs?(args.__find_args__) ? find_by_slug!(*args) : super
+        look_like_slugs?(prepare_ids_for_find(args)) ? find_by_slug!(*args) : super
       end
 
       # Find the matchind document(s) in the criteria for the provided slugs.
@@ -45,9 +45,9 @@ module Mongoid
       #
       # @return [ Array<Document>, Document ] The matching document(s).
       def find_by_slug!(*args)
-        slugs = args.__find_args__
+        slugs = prepare_ids_for_find(args)
         raise_invalid if slugs.any?(&:nil?)
-        for_slugs(slugs).execute_or_raise_for_slugs(slugs, args.multi_arged?)
+        for_slugs(slugs).execute_or_raise_for_slugs(slugs, multi_args?(args))
       end
 
       def look_like_slugs?(args)
@@ -106,6 +106,51 @@ module Mongoid
 
         raise Errors::DocumentNotFound.new(klass, slugs, missing_slugs)
       end
+
+      private 
+
+      # Convert args to the +#find+ method into a flat array of ids.
+      # 
+      # https://jira.mongodb.com/browse/MONGOID-5660
+      # https://github.com/mongodb/mongoid/pull/5706
+      #
+      # @example Get the ids.
+      #   prepare_ids_for_find([ 1, [ 2, 3 ] ])
+      #
+      # @param [ Array<Object> ] args The arguments.
+      #
+      # @return [ Array ] The array of ids.
+      def prepare_ids_for_find(args)
+        args.flat_map do |arg|
+          case arg
+          when Array, Set
+            prepare_ids_for_find(arg)
+          when Range
+            arg.begin&.numeric? && arg.end&.numeric? ? arg.to_a : arg
+          else
+            arg
+          end
+        end.uniq(&:to_s)
+      end
+
+
+      # Indicates whether the given arguments array is a list of values.
+      # Used by the +find+ method to determine whether to return an array
+      # or single value.
+      # 
+      # https://jira.mongodb.com/browse/MONGOID-5669
+      # https://github.com/mongodb/mongoid/pull/5702/commits
+      #
+      # @example Are these arguments a list of values?
+      #   multi_args?([ 1, 2, 3 ]) #=> true
+      #
+      # @param [ Array ] args The arguments.
+      #
+      # @return [ true | false ] Whether the arguments are a list.
+      def multi_args?(args)
+        args.size > 1 || !args.first.is_a?(Hash) && args.first.resizable?
+      end
+
     end
   end
 end

@@ -16,7 +16,7 @@ Gem::Specification.new do |s|
 
   s.required_ruby_version = '>= 2.7'
 
-  s.add_dependency 'mongoid', '>= 7.0'
+  s.add_dependency 'mongoid', '>= 9.0'
   s.add_dependency 'stringex', '~> 2.0'
 
   s.files         = Dir.glob('lib/**/*') + %w[LICENSE README.md]
